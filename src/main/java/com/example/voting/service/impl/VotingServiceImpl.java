@@ -1,19 +1,19 @@
 package com.example.voting.service.impl;
 
 import com.example.voting.contract.VotingContract;
-import com.example.voting.dto.CandidateDto;
-import com.example.voting.dto.CreateVotingRequest;
-import com.example.voting.dto.VoteRequest;
-import com.example.voting.dto.VotingDto;
+import com.example.voting.dto.*;
 import com.example.voting.service.VotingService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.web3j.crypto.Credentials;
 import org.web3j.protocol.Web3j;
+import org.web3j.tuples.generated.Tuple3;
+import org.web3j.tuples.generated.Tuple6;
 import org.web3j.tx.gas.DefaultGasProvider;
 
 import java.math.BigInteger;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -50,7 +50,7 @@ public class VotingServiceImpl implements VotingService {
         contract.createVoting(
                 request.getTitle(),
                 request.getDescription(),
-                BigIntceger.valueOf(request.getDuration()),
+                BigInteger.valueOf(request.getDuration()),
                 candidateNames
         ).send();
 
@@ -74,16 +74,18 @@ public class VotingServiceImpl implements VotingService {
     public VotingDto getVotingById(Long votingId) throws Exception {
         VotingContract contract = loadContract();
 
-        VotingContract.Voting voting = contract.votings(BigInteger.valueOf(votingId)).send();
+        Tuple6<BigInteger, String, String, BigInteger, BigInteger, Boolean> votingTuple =
+                contract.votings(BigInteger.valueOf(votingId)).send();
+        Voting voting = new Voting(votingTuple);  // 转换为 Voting 对象
         List<VotingContract.Candidate> candidates = contract.getVotingResults(BigInteger.valueOf(votingId)).send();
 
         VotingDto dto = new VotingDto();
         dto.setId(votingId);
-        dto.setTitle(voting.title);
-        dto.setDescription(voting.description);
-        dto.setStartTime(voting.startTime.longValue());
-        dto.setEndTime(voting.endTime.longValue());
-        dto.setIsActive(voting.isActive);
+        dto.setTitle(voting.getTitle());
+        dto.setDescription(voting.getDescription());
+        dto.setStartTime(voting.getStartTime().longValue());
+        dto.setEndTime(voting.getEndTime().longValue());
+        dto.setIsActive(voting.getIsActive());
 
         List<CandidateDto> candidateDtos = candidates.stream()
                 .map(c -> {
@@ -105,20 +107,20 @@ public class VotingServiceImpl implements VotingService {
     public List<VotingDto> getActiveVotings() throws Exception {
         VotingContract contract = loadContract();
 
-        List<VotingContract.Voting> votings = contract.getActiveVotings().send();
+        Tuple3<List<BigInteger>, List<String>, List<BigInteger>> activeVotings =
+                contract.getActiveVotings().send();
 
-        return votings.stream()
-                .map(v -> {
-                    VotingDto dto = new VotingDto();
-                    dto.setId(v.id.longValue());
-                    dto.setTitle(v.title);
-                    dto.setDescription(v.description);
-                    dto.setStartTime(v.startTime.longValue());
-                    dto.setEndTime(v.endTime.longValue());
-                    dto.setIsActive(v.isActive);
-                    return dto;
-                })
-                .collect(Collectors.toList());
+        // 转换逻辑
+        List<VotingDto> votingDtos = new ArrayList<>();
+        for (int i = 0; i < activeVotings.component1().size(); i++) {
+            VotingDto dto = new VotingDto();
+            dto.setId(activeVotings.component1().get(i).longValue());
+            dto.setTitle(activeVotings.component2().get(i));
+            dto.setEndTime(activeVotings.component3().get(i).longValue());
+            votingDtos.add(dto);
+        }
+
+        return votingDtos;
 
     }
 
