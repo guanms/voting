@@ -1,1 +1,12 @@
-spring.application.name=voting
+server:
+  port: 8080
+
+spring:
+  application:
+    name: voting
+
+# Ethereum node configuration
+web3j:
+  client-address: http://localhost:8545
+  contract-address: 123
+  wallet-private-key: 123
