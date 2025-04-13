@@ -8,9 +8,12 @@ import java.util.List;
 
 public interface VotingService {
 
-    VotingDto createVoting(CreateVotingRequest request) throws Exception;
-    VotingDto getVotingById(Long votingId) throws Exception;
-    List<VotingDto> getActiveVotings() throws Exception;
-    void vote(VoteRequest request) throws Exception;
+    VotingDto createVoting(CreateVotingRequest request);
+
+    VotingDto getVotingById(Long votingId) ;
+
+    List<VotingDto> getActiveVotings() ;
+
+    void vote(VoteRequest request) ;
 
 }

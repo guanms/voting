@@ -36,13 +36,24 @@ contract VotingContract {
         uint256 endTime;
         bool isActive;
         Candidate[] candidates;
-        address[] voters;
+        mapping(address => bool) voted;  // 替换原voters数组
+        uint256 voterCount;             // 新增投票人数统计
     }
 
-    mapping(uint256 => Voting) public votings;
+   // 优化：添加自定义错误类型降低gas消耗
+    error InsufficientCandidates();
+    error VotingNotActive();
+    error VotingEnded();
+    error AlreadyVoted();
+    error InvalidCandidate();
+
+    // 优化：使用更紧凑的存储结构
+    mapping(uint256 => Voting) private _votings;
     uint256 public votingCount;
-    event VotingCreated(uint256 votingId, string title);
-    event Voted(uint256 votingId, uint256 candidateId, address voter);
+
+    // 优化：为事件添加indexed参数
+    event VotingCreated(uint256 indexed votingId, string title);
+    event Voted(uint256 indexed votingId, uint256 candidateId, address indexed voter);
 
     /// @notice 创建投票活动
     /// @param _title 投票活动标题
@@ -50,10 +61,12 @@ contract VotingContract {
     /// @param _duration 投票活动持续时间
     /// @param _candidateNames 投票活动候选人列表
     function createVoting(string memory _title, string memory _description, uint256 _duration, string[] memory _candidateNames) public {
-        require(_candidateNames.length>=2, "At least 2 candidates required");
+        if (_candidateNames.length < 2) revert InsufficientCandidates();
 
         uint256 votingId = votingCount++;
-        Voting storage newVoting = votings[votingId];
+        Voting storage newVoting = _votings[votingId];
+
+        // 初始化投票基础信息
         newVoting.id = votingId;
         newVoting.title = _title;
         newVoting.description = _description;
@@ -61,45 +74,43 @@ contract VotingContract {
         newVoting.endTime = block.timestamp + _duration;
         newVoting.isActive = true;
 
-        for (uint i=0; i<_candidateNames.length; i++){
-            newVoting.candidates.push(Candidate(i, _candidateNames[i], 0));
+        // 优化：预分配数组空间
+        // 修改为逐个push：
+        for (uint i = 0; i < _candidateNames.length; i++) {
+            newVoting.candidates.push(Candidate({
+                id: i,
+                name: _candidateNames[i],
+                voteCount: 0
+            }));
         }
-        /// 触发投票活动创建事件
+
         emit VotingCreated(votingId, _title);
     }
+
 
     /// @notice 投票
     /// @param _votingId 投票活动ID
     /// @param _candidateId 投票候选人ID
-    function vote(uint _votingId, uint _candidateId) public{
-        Voting storage voting = votings[_votingId];
-        require(voting.isActive, "Voting is not active");
-        require(block.timestamp <= voting.endTime, "Voting has ended");
-        require(!_hasVoted(voting, msg.sender), "You have already voted");
+    function vote(uint _votingId, uint _candidateId) public {
+        Voting storage voting = _votings[_votingId];
 
-        // 标记该地址已投票
-        voting.voters.push(msg.sender);
-        // 增加候选人得票数
+        if (!voting.isActive) revert VotingNotActive();
+        if (block.timestamp > voting.endTime) revert VotingEnded();
+        if (voting.voted[msg.sender]) revert AlreadyVoted();
+        if (_candidateId >= voting.candidates.length) revert InvalidCandidate();
+
+        // 优化：使用mapping记录投票状态
+        voting.voted[msg.sender] = true;
+        voting.voterCount++;
         voting.candidates[_candidateId].voteCount++;
 
         emit Voted(_votingId, _candidateId, msg.sender);
     }
 
-    function _hasVoted(Voting storage voting, address voter) internal view returns (bool) {
-        for(uint i=0; i<voting.voters.length; i++){
-            if(voting.voters[i] == voter){
-                return true;
-            }
-        }
-        return false;
-    }
-
-
-
     /// @notice 获取投票结果
     /// @param _votingId 投票活动ID
-    function getVotingResults(uint _votingId) public view returns (Candidate[] memory){
-        return votings[_votingId].candidates;
+    function getVotingResults(uint _votingId) public view returns (Candidate[] memory) {
+        return _votings[_votingId].candidates;
     }
 
     /**
@@ -109,31 +120,33 @@ contract VotingContract {
      * @return endTimes 活跃投票的结束时间数组
      * @dev 返回精简的投票信息（避免gas过高）
      */
+    // 优化：使用单次遍历+动态数组
     function getActiveVotings() public view returns (uint256[] memory ids, string[] memory titles, uint256[] memory endTimes) {
-        uint256 activeCount = 0;
+        uint256 count = votingCount;
+        uint256[] memory tempIds = new uint256[](count);
+        string[] memory tempTitles = new string[](count);
+        uint256[] memory tempEndTimes = new uint256[](count);
 
-        // 第一次遍历计算数量
-        for (uint256 i = 0; i < votingCount; i++) {
-            if (votings[i].isActive && block.timestamp <= votings[i].endTime) {
-                activeCount++;
+        uint256 validCount;
+        for (uint256 i = 0; i < count; i++) {
+            Voting storage v = _votings[i];
+            if (v.isActive && block.timestamp <= v.endTime) {
+                tempIds[validCount] = v.id;
+                tempTitles[validCount] = v.title;
+                tempEndTimes[validCount] = v.endTime;
+                validCount++;
             }
         }
 
-        // 初始化数组
-        ids = new uint256[](activeCount);
-        titles = new string[](activeCount);
-        endTimes = new uint256[](activeCount);
+        // 裁剪数组到实际大小
+        ids = new uint256[](validCount);
+        titles = new string[](validCount);
+        endTimes = new uint256[](validCount);
 
-        // 第二次遍历填充数据
-        uint256 index = 0;
-        for (uint256 i = 0; i < votingCount; i++) {
-            Voting storage v = votings[i];
-            if (v.isActive && block.timestamp <= v.endTime) {
-                ids[index] = v.id;
-                titles[index] = v.title;
-                endTimes[index] = v.endTime;
-                index++;
-            }
+        for (uint256 i = 0; i < validCount; i++) {
+            ids[i] = tempIds[i];
+            titles[i] = tempTitles[i];
+            endTimes[i] = tempEndTimes[i];
         }
     }
 
@@ -149,7 +162,7 @@ contract VotingContract {
      * @dev 需要单独调用getVotingResults获取候选人详情
      */
     function getVotingDetails(uint256 _votingId) public view returns (uint256 id, string memory title, string memory description, uint256 startTime, uint256 endTime, bool isActive, uint256 voterCount) {
-        Voting storage v = votings[_votingId];
+        Voting storage v = _votings[_votingId];
         return (
             v.id,
             v.title,
@@ -157,7 +170,7 @@ contract VotingContract {
             v.startTime,
             v.endTime,
             v.isActive,
-            v.voters.length
+            v.voterCount  // 使用存储的统计值
         );
     }
 

@@ -1,0 +1,10 @@
+<plugin>
+    <groupId>org.web3j</groupId>
+    <artifactId>web3j-maven-plugin</artifactId>
+    <version>4.9.8</version>
+    <configuration>
+        <soliditySourceFiles>src/main/resources/contracts/VotingContract.sol</soliditySourceFiles>
+        <outputDirectory>src/main/java</outputDirectory>
+        <packageName>com.example.voting.contract</packageName>
+    </configuration>
+</plugin>

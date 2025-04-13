@@ -16,21 +16,25 @@ public class VotingController {
     @Autowired
     private VotingService votingService;
 
+    @CrossOrigin
     @PostMapping
     public VotingDto createVoting(@RequestBody CreateVotingRequest request) throws Exception {
         return votingService.createVoting(request);
     }
 
+    @CrossOrigin
     @GetMapping("/active")
     public List<VotingDto> getActiveVotings() throws Exception {
         return votingService.getActiveVotings();
     }
 
+    @CrossOrigin
     @GetMapping("/{id}")
     public VotingDto getVotingById(@PathVariable Long id) throws Exception {
         return votingService.getVotingById(id);
     }
 
+    @CrossOrigin
     @PostMapping("/vote")
     public void vote(@RequestBody VoteRequest request) throws Exception {
         votingService.vote(request);

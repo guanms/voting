@@ -7,6 +7,5 @@ spring:
 
 # Ethereum node configuration
 web3j:
-  client-address: http://localhost:8545
-  contract-address: 123
-  wallet-private-key: 123
+  client-address: http://127.0.0.1:8545
+  wallet-private-key: "0x692....95a"
